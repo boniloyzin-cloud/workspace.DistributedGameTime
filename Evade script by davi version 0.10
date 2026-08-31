@@ -1,0 +1,521 @@
+-- DAVI_EVADE Script (Rayfield UI + Keypress Jump High + Individual Show Button Toggles)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Global State Variables
+getgenv().AutoJump = false
+getgenv().Bhop = false
+getgenv().FrontJump = false
+getgenv().BackJump = false
+getgenv().RevivedAura = false
+getgenv().AutoTrimp = false
+getgenv().AutoWin = false
+getgenv().Noclip = false
+getgenv().InfJump = false
+getgenv().ShowGameTime = false
+getgenv().JumpHigh = false
+
+getgenv().JumpHighPower = 1
+getgenv().InstallationSpeed = 70
+
+-- Helper function for Rayfield Notifications
+local function notifyStatus(featureName, state)
+    local statusText = state and "Enabled" or "Disabled"
+    Rayfield:Notify({
+        Title = featureName,
+        Content = featureName .. " is now " .. statusText .. ".",
+        Duration = 2,
+        Image = 4483362458,
+    })
+end
+
+-- Timer State Variables
+local startTime = 0
+local timerParagraph = nil
+
+-- UI Window Setup
+local Window = Rayfield:CreateWindow({
+   Name = "DAVI_EVADE",
+   LoadingTitle = "DAVI_EVADE Loading...",
+   LoadingSubtitle = "by DAVI",
+   ConfigurationSaving = { Enabled = false },
+   Discord = { Enabled = false },
+   KeySystem = false
+})
+
+local MovementTab = Window:CreateTab("Movement", 4483362458)
+local MainTab = Window:CreateTab("Main / Win", 4483362458)
+
+--- ================= === PERSISTENT SCREEN BUTTON MANAGER === ================= ---
+
+local activeButtons = {}
+local toggleUIReferences = {}
+local defaultYOffset = 0.3
+
+local function updateButtonAppearance(btn, displayName, state)
+    if state then
+        btn.BackgroundColor3 = Color3.fromRGB(0, 180, 90)
+        btn.Text = displayName .. " [ON]"
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        btn.Text = displayName .. " [OFF]"
+    end
+end
+
+local function manageScreenButton(featureKey, displayName, enableState, showButtonState)
+    -- Remove button if Show Button is toggled OFF
+    if not showButtonState then
+        if activeButtons[featureKey] then
+            activeButtons[featureKey].Gui:Destroy()
+            activeButtons[featureKey] = nil
+        end
+        return
+    end
+
+    -- Create or update button if Show Button is toggled ON
+    if not activeButtons[featureKey] then
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "DAVI_Button_" .. featureKey
+        screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        screenGui.ResetOnSpawn = false
+
+        local btn = Instance.new("TextButton")
+        btn.Name = featureKey .. "Btn"
+        btn.Parent = screenGui
+        
+        local activeCount = 0
+        for _ in pairs(activeButtons) do activeCount = activeCount + 1 end
+        btn.Position = UDim2.new(0.8, 0, defaultYOffset + (activeCount * 0.11), 0)
+        
+        btn.Size = UDim2.new(0, 110, 0, 45)
+        btn.Font = Enum.Font.SourceSansBold
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.TextSize = 13.000
+        btn.Active = true
+
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = UDim.new(0.3, 0)
+        uiCorner.Parent = btn
+
+        updateButtonAppearance(btn, displayName, enableState)
+
+        -- Touch & Mouse Dragging Logic
+        local dragging = false
+        local dragInput, dragStart, startPos
+
+        local function update(input)
+            local delta = input.Position - dragStart
+            btn.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X, 
+                startPos.Y.Scale, 
+                startPos.Y.Offset + delta.Y
+            )
+        end
+
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = btn.Position
+
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+
+        btn.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                update(input)
+            end
+        end)
+
+        btn.MouseButton1Click:Connect(function()
+            local newState = not getgenv()[featureKey]
+            getgenv()[featureKey] = newState
+            
+            if toggleUIReferences[featureKey] then
+                toggleUIReferences[featureKey]:Set(newState)
+            end
+            
+            updateButtonAppearance(btn, displayName, newState)
+            notifyStatus(displayName, newState)
+        end)
+
+        activeButtons[featureKey] = { Gui = screenGui, Button = btn }
+    else
+        local btnData = activeButtons[featureKey]
+        updateButtonAppearance(btnData.Button, displayName, enableState)
+    end
+end
+
+--- ================= === SYSTEM LOGIC === ================= ---
+
+-- Trigger High Jump when Jump Key/Button is Pressed
+UserInputService.JumpRequest:Connect(function()
+    if getgenv().JumpHigh then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local impulsePower = 40 + (getgenv().JumpHighPower * 15)
+                    hrp.AssemblyLinearVelocity = Vector3.new(
+                        hrp.AssemblyLinearVelocity.X,
+                        impulsePower,
+                        hrp.AssemblyLinearVelocity.Z
+                    )
+                end
+            end
+        end)
+    end
+end)
+
+-- Live Game Time Display Loop
+RunService.RenderStepped:Connect(function()
+    if getgenv().ShowGameTime and timerParagraph then
+        local elapsed = math.floor(workspace.DistributedGameTime - startTime)
+        local minutes = math.floor(elapsed / 60)
+        local seconds = elapsed % 60
+        local timeString = string.format("%02d:%02d", minutes, seconds)
+        
+        pcall(function()
+            timerParagraph:Set({ Title = "In-Game Time", Content = "Elapsed Time: " .. timeString })
+        end)
+    end
+end)
+
+-- Instant Ground-Touch Bhop Logic
+local function setupBhopCharacter(char)
+    if not char then return end
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then
+        hum.StateChanged:Connect(function(_, newState)
+            if getgenv().Bhop then
+                if newState == Enum.HumanoidStateType.Landed or newState == Enum.HumanoidStateType.Running or newState == Enum.HumanoidStateType.RunningNoPhysics then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+    end
+end
+
+if LocalPlayer.Character then
+    setupBhopCharacter(LocalPlayer.Character)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    setupBhopCharacter(char)
+end)
+
+-- Raycast ground distance check
+RunService.RenderStepped:Connect(function()
+    if getgenv().Bhop then
+        pcall(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hrp and hum then
+                local ray = Ray.new(hrp.Position, Vector3.new(0, -3.5, 0))
+                local hitPart = workspace:FindPartOnRayWithIgnoreList(ray, {char})
+                if hitPart and hum:GetState() ~= Enum.HumanoidStateType.Jumping then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+    end
+end)
+
+-- Continuous Auto Jump Logic
+RunService.RenderStepped:Connect(function()
+    if getgenv().AutoJump then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.FloorMaterial ~= Enum.Material.Air then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+    end
+end)
+
+-- Revived Aura Logic (With Cooldown Delay)
+local isReviving = false
+task.spawn(function()
+    while task.wait(0.5) do
+        if getgenv().RevivedAura and not isReviving then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                        local targetChar = plr.Character
+                        local isDowned = targetChar:GetAttribute("Downed") or targetChar:FindFirstChild("Revive") or (targetChar:FindFirstChildOfClass("Humanoid") and targetChar:FindFirstChildOfClass("Humanoid").Health <= 0)
+                        
+                        if isDowned then
+                            isReviving = true
+                            local originalCFrame = hrp.CFrame
+                            local targetHrp = targetChar.HumanoidRootPart
+
+                            -- Teleport to downed player
+                            hrp.CFrame = targetHrp.CFrame + Vector3.new(0, 2, 0)
+                            task.wait(0.1)
+
+                            -- Trigger revive prompt
+                            local revivePrompt = targetChar:FindFirstChildWhichIsA("ProximityPrompt", true)
+                            if revivePrompt then
+                                fireproximityprompt(revivePrompt)
+                            end
+
+                            task.wait(0.2)
+                            -- Teleport back to starting point
+                            hrp.CFrame = originalCFrame
+                            
+                            -- Cooldown before reviving the next player
+                            task.wait(3)
+                            isReviving = false
+                            break
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Front Jump Logic
+RunService.Heartbeat:Connect(function()
+    if getgenv().FrontJump then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hum and hrp then
+                    if hum.FloorMaterial ~= Enum.Material.Air then
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                    local lookVector = hrp.CFrame.LookVector
+                    local speed = getgenv().InstallationSpeed
+                    hrp.AssemblyLinearVelocity = Vector3.new(lookVector.X * speed, hrp.AssemblyLinearVelocity.Y, lookVector.Z * speed)
+                end
+            end
+        end)
+    end
+end)
+
+-- Back Jump Logic
+RunService.Heartbeat:Connect(function()
+    if getgenv().BackJump then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hum and hrp then
+                    if hum.FloorMaterial ~= Enum.Material.Air then
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                    local lookVector = hrp.CFrame.LookVector
+                    local speed = getgenv().InstallationSpeed
+                    hrp.AssemblyLinearVelocity = Vector3.new(-lookVector.X * speed, hrp.AssemblyLinearVelocity.Y, -lookVector.Z * speed)
+                end
+            end
+        end)
+    end
+end)
+
+-- Auto Trimp Logic
+local lastState = Enum.HumanoidStateType.Running
+task.spawn(function()
+    while task.wait() do
+        if getgenv().AutoTrimp then
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hum and hrp then
+                        local currentState = hum:GetState()
+                        if lastState == Enum.HumanoidStateType.Freefall and (currentState == Enum.HumanoidStateType.Landed or currentState == Enum.HumanoidStateType.Running) then
+                            hrp.Velocity = Vector3.new(hrp.Velocity.X, 150, hrp.Velocity.Z)
+                        end
+                        lastState = currentState
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto Win Platform Variable
+local winPlatform = nil
+
+-- Noclip Logic
+RunService.Stepped:Connect(function()
+    if getgenv().Noclip then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Infinite Jump Logic
+UserInputService.JumpRequest:Connect(function()
+    if getgenv().InfJump then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+    end
+end)
+
+--- ================= === UI CONTROLS & NOTIFICATIONS === ================= ---
+
+-- Function helper to create feature toggle + show button sub-toggle
+local function createFeatureControl(tab, featureKey, displayName)
+    getgenv()["Show_" .. featureKey] = false
+
+    toggleUIReferences[featureKey] = tab:CreateToggle({
+       Name = displayName,
+       CurrentValue = false,
+       Flag = featureKey .. "Toggle",
+       Callback = function(Value)
+          getgenv()[featureKey] = Value
+          manageScreenButton(featureKey, displayName, Value, getgenv()["Show_" .. featureKey])
+          notifyStatus(displayName, Value)
+       end,
+    })
+
+    tab:CreateToggle({
+       Name = "  -> Show " .. displayName .. " Button",
+       CurrentValue = false,
+       Flag = "Show_" .. featureKey .. "Toggle",
+       Callback = function(Value)
+          getgenv()["Show_" .. featureKey] = Value
+          manageScreenButton(featureKey, displayName, getgenv()[featureKey], Value)
+       end,
+    })
+end
+
+-- MOVEMENT TAB CONTROLS
+
+createFeatureControl(MovementTab, "JumpHigh", "Jump High")
+
+MovementTab:CreateSlider({
+   Name = "Jump High Power Level",
+   Range = {1, 20},
+   Increment = 1,
+   Suffix = " Level",
+   CurrentValue = 1,
+   Flag = "JumpHighPowerSlider",
+   Callback = function(Value) 
+      getgenv().JumpHighPower = Value 
+   end,
+})
+
+createFeatureControl(MovementTab, "Bhop", "Bhop")
+createFeatureControl(MovementTab, "AutoJump", "Auto Jump")
+createFeatureControl(MovementTab, "FrontJump", "Front Jump")
+createFeatureControl(MovementTab, "BackJump", "Back Jump")
+
+MovementTab:CreateSlider({
+   Name = "Installation Speed (Front/Back Jump)",
+   Range = {1, 200},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 70,
+   Flag = "InstallationSpeedSlider",
+   Callback = function(Value) getgenv().InstallationSpeed = Value end,
+})
+
+createFeatureControl(MovementTab, "RevivedAura", "Revive Aura")
+createFeatureControl(MovementTab, "AutoTrimp", "Auto Trimp")
+createFeatureControl(MovementTab, "Noclip", "Noclip")
+createFeatureControl(MovementTab, "InfJump", "Infinite Jump")
+
+-- MAIN TAB CONTROLS
+
+MainTab:CreateToggle({
+   Name = "Show Game Time",
+   CurrentValue = false,
+   Flag = "ShowGameTimeToggle",
+   Callback = function(Value)
+      getgenv().ShowGameTime = Value
+      notifyStatus("Show Game Time", Value)
+      if Value then
+          startTime = workspace.DistributedGameTime
+          if not timerParagraph then
+              timerParagraph = MainTab:CreateParagraph({ Title = "In-Game Time", Content = "Elapsed Time: 00:00" })
+          end
+      else
+          if timerParagraph then
+              timerParagraph:Set({ Title = "In-Game Time", Content = "Timer Stopped" })
+          end
+      end
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Auto Win (Fly High & Safe Platform)",
+   CurrentValue = false,
+   Flag = "AutoWinToggle",
+   Callback = function(Value)
+      getgenv().AutoWin = Value
+      notifyStatus("Auto Win", Value)
+      pcall(function()
+          local char = LocalPlayer.Character
+          local hrp = char and char:FindFirstChild("HumanoidRootPart")
+          if Value and hrp then
+              hrp.CFrame = hrp.CFrame + Vector3.new(0, 500, 0)
+              
+              if not winPlatform or not winPlatform.Parent then
+                  winPlatform = Instance.new("Part")
+                  winPlatform.Name = "DAVI_SafeBoard"
+                  winPlatform.Size = Vector3.new(50, 2, 50)
+                  winPlatform.Anchored = true
+                  winPlatform.Material = Enum.Material.Neon
+                  winPlatform.Color = Color3.fromRGB(0, 255, 150)
+                  winPlatform.Parent = workspace
+              end
+              winPlatform.CFrame = hrp.CFrame - Vector3.new(0, 3, 0)
+          else
+              if winPlatform then
+                  winPlatform:Destroy()
+                  winPlatform = nil
+              end
+          end
+      end)
+   end,
+})
+
+MainTab:CreateLabel("Script Managed by DAVI")
