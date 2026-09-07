@@ -1,4 +1,30 @@
 -- DAVI_EVADE Script (Rayfield UI + Keypress Jump High + Individual Show Button Toggles)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- បញ្ជីឈ្មោះអ្នកដែលត្រូវ Ban (អាចថែមឈ្មោះផ្សេងទៀតបានតាមក្រោយ)
+local BannedUsernames = {
+    "AHWIN320",
+}
+
+-- ប្រព័ន្ធពិនិត្យមើល និង Ban ដោយស្វ័យប្រវត្តិ
+for _, name in ipairs(BannedUsernames) do
+    -- ពិនិត្យមើលឈ្មោះ Username ដោយផ្ទាល់
+    if LocalPlayer.Name:lower() == name:lower() then
+        LocalPlayer:Kick("អ្នកត្រូវបាន Banned មិនឱ្យប្រើប្រាស់ Script នេះទេ!")
+        return
+    end
+
+    -- ពិនិត្យមើលតាមរយៈ UserId ប្រសិនបើគេប្តូរ Display Name
+    local success, bannedId = pcall(function()
+        return Players:GetUserIdFromNameAsync(name)
+    end)
+
+    if success and LocalPlayer.UserId == bannedId then
+        LocalPlayer:Kick("អ្នកត្រូវបាន Banned មិនឱ្យប្រើប្រាស់ Script នេះទេ!")
+        return
+    end
+end
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Players = game:GetService("Players")
