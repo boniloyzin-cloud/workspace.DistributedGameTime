@@ -4,7 +4,7 @@ local LocalPlayer = Players.LocalPlayer
 
 -- បញ្ជីឈ្មោះអ្នកដែលត្រូវ Ban (អាចថែមឈ្មោះផ្សេងទៀតបានតាមក្រោយ)
 local BannedUsernames = {
-    "AHWIN320",
+    "AHWING32",
 }
 
 -- ប្រព័ន្ធពិនិត្យមើល និង Ban ដោយស្វ័យប្រវត្តិ
